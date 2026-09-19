@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>My courses | E-Learning</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎓</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <button class="icon-btn menu-btn" id="menuBtn" aria-label="Open menu" aria-expanded="false">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
+
+    <a class="brand" href="/" aria-label="E-Learning home">
+      <svg class="brand-mark" viewBox="0 0 48 48" aria-hidden="true">
+        <path d="M24 8 3 18l21 10 21-10z" fill="var(--navy)"/>
+        <path d="M11 23v9c0 3 6 7 13 7s13-4 13-7v-9l-13 6z" fill="var(--navy)" opacity=".85"/>
+        <path d="M42 19v11" stroke="var(--navy)" stroke-width="2.4" stroke-linecap="round"/>
+        <circle cx="42" cy="32" r="2.4" fill="var(--navy)"/>
+      </svg>
+      <span class="brand-text">E-Learning<small>Student portal</small></span>
+    </a>
+
+    <nav class="primary-nav" id="primaryNav">
+      <a href="#">Home</a>
+      <a href="#">Dashboard</a>
+      <a href="#" class="active" aria-current="page">My courses</a>
+    </nav>
+
+    <div class="topbar-right">
+      <button class="icon-btn bell" aria-label="Notifications (1)">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg>
+        <span class="badge">1</span>
+      </button>
+      <svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg>
+      <div class="avatar" aria-label="Your profile">
+        <svg viewBox="0 0 60 60"><circle cx="30" cy="30" r="30" fill="#c9c9c9"/><circle cx="30" cy="24" r="10" fill="#fff"/><path d="M12 50c3-10 10-14 18-14s15 4 18 14" fill="#fff"/></svg>
+      </div>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="toolbar">
+      <div class="select-wrap">
+        <select id="statusFilter" aria-label="Filter courses">
+          <option value="inprogress">In progress</option>
+          <option value="all">All</option>
+          <option value="future">Future</option>
+          <option value="past">Past</option>
+        </select>
+      </div>
+      <div class="toolbar-right">
+        <label class="search">
+          <input id="search" type="search" placeholder="Search" aria-label="Search courses" />
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+        </label>
+        <div class="select-wrap">
+          <select id="sortSelect" aria-label="Sort courses">
+            <option value="accessed">Sort by last accessed</option>
+            <option value="name">Sort by course name</option>
+          </select>
+        </div>
+        <div class="select-wrap">
+          <select id="viewSelect" aria-label="Display">
+            <option value="card">Card</option>
+            <option value="list">List</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <section class="courses" id="courses" aria-live="polite"></section>
+    <p class="empty" id="empty" hidden>No courses match your search.</p>
+  </main>
+
+  <footer class="footer">© 2026 E-Learning Chat. Built for personal study.</footer>
+
+  <!-- ===== Chat widget ===== -->
+  <button class="chat-fab" id="chatFab" aria-label="Open coding assistant" aria-expanded="false">💬</button>
+
+  <aside class="chat" id="chat" role="dialog" aria-label="Coding assistant" hidden>
+    <div class="chat-head">
+      <div>
+        <strong>Coding assistant</strong>
+        <span class="chat-model" id="chatModel">connecting…</span>
+      </div>
+      <div class="chat-head-actions">
+        <button class="text-btn" id="newChat" title="Start a new conversation">New chat</button>
+        <button class="icon-btn" id="closeChat" aria-label="Close assistant">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="chat-body" id="chatBody">
+      <div class="chat-welcome" id="chatWelcome">
+        <p>Paste some code or describe what you're building. I can explain, debug, or write it.</p>
+        <div class="chips">
+          <button class="chip">Explain this error message</button>
+          <button class="chip">Write a MATLAB script for an FFT plot</button>
+          <button class="chip">Review my Python function</button>
+        </div>
+      </div>
+    </div>
+
+    <form class="chat-input" id="chatForm">
+      <textarea id="chatText" rows="1" placeholder="Ask about your code…"></textarea>
+      <button type="submit" class="send-btn" id="sendBtn" aria-label="Send">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3 20.5 21 12 3 3.5 3 10l12 2-12 2z"/></svg>
+      </button>
+    </form>
+  </aside>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

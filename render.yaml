@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: elearning-chat
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: OLLAMA_HOST
+        value: https://ollama.com
+      - key: OLLAMA_MODEL
+        value: gpt-oss:20b
+      - key: OLLAMA_API_KEY
+        sync: false
+      - key: ACCESS_PASSWORD
+        sync: false
