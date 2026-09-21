@@ -1,61 +1,55 @@
-# E-Learning Chat
+# E-Learning Chat (v2)
 
-A Moodle-style "My courses" page with a floating 💬 coding assistant powered by Ollama.
+A Moodle-style "My courses" site with an AI assistant that:
+
+- saves every chat inside a course (each course page lists its chats),
+- lets you pick from many AI models (free ones first, paid Claude/OpenAI if you add keys),
+- accepts photos and code files by drag-and-drop, paste (Ctrl+V) or the paperclip button.
 
 ```
-elearning-chat/
-├── server.js          Express server: serves the page + proxies /api/chat to Ollama (streaming)
-├── public/
-│   ├── index.html     Page layout (header, toolbar, course cards, chat panel)
-│   ├── style.css      Styling
-│   └── app.js         Your course list, card patterns, search/sort, chat logic
-├── render.yaml        One-click Render blueprint
-├── .env.example       Settings template
-└── package.json
+server.js            web server + API
+lib/providers.js     talks to GitHub Models, Gemini, OpenRouter, Ollama, Claude, OpenAI
+lib/store.js         saves chats (MongoDB, or local files as a fallback)
+public/index.html    page layout
+public/style.css     design
+public/js/courses.js YOUR COURSE LIST (edit this) + course pages
+public/js/chat.js    the chat panel
 ```
 
-## Important: where does Ollama run?
+## What is free and what isn't
 
-Render's free plan has 512 MB RAM and no GPU, so it cannot run an Ollama model itself.
-The Render server only hosts the website and forwards chat messages to Ollama somewhere else.
-Pick one:
+| Provider | Cost | What you get | Where to get the key |
+|---|---|---|---|
+| GitHub Models | Free, daily limits | OpenAI GPT-4.1, GPT-4o, GPT-5 mini and more, plus Llama, DeepSeek | github.com, Settings, Developer settings, Fine-grained tokens, permission **Models: read** |
+| Google Gemini | Free (Flash models) | Gemini Flash / Flash-Lite, reads photos | aistudio.google.com/apikey |
+| OpenRouter | Free models only | Whatever OpenRouter offers at $0 today (list updates automatically) | openrouter.ai/keys |
+| Ollama Cloud | Free tier with usage limits | gpt-oss, Qwen, DeepSeek, Kimi | ollama.com/settings/keys |
+| Anthropic | **Paid** | Claude Opus, Sonnet, Haiku | console.anthropic.com |
+| OpenAI | **Paid** | Full ChatGPT model range | platform.openai.com |
 
-**A. Ollama Cloud (easiest, works 24/7)**
-1. Create an account at ollama.com and make an API key at ollama.com/settings/keys.
-2. Use `OLLAMA_HOST=https://ollama.com`, `OLLAMA_API_KEY=<your key>`, and a cloud model such as `gpt-oss:20b`.
+Each provider appears in the model picker only when its key is set. Models tagged **Images** can read photos.
 
-**B. Ollama on your own PC (free, only works while your PC is on)**
-1. Install Ollama, then `ollama pull qwen2.5-coder:7b`
-2. Expose it with a tunnel: `cloudflared tunnel --url http://localhost:11434`
-3. Use the printed `https://....trycloudflare.com` URL as `OLLAMA_HOST`, the model name as `OLLAMA_MODEL`, and leave `OLLAMA_API_KEY` empty.
+## Keeping chats (MongoDB Atlas, free)
+
+Render's free plan erases files whenever the service restarts or sleeps, so saved chats need a database:
+
+1. Sign up at mongodb.com/atlas and create a **free (M0)** cluster.
+2. Create a database user (username + password).
+3. Network Access, Add IP Address, **Allow access from anywhere** (0.0.0.0/0), because Render's IP changes.
+4. Connect, Drivers, copy the connection string. Replace `<db_password>` with your password.
+5. Put it in Render as `MONGODB_URI`.
+
+Without `MONGODB_URI` the site still works, but chats can vanish after a restart (the History panel shows a warning).
 
 ## Run locally
 
 ```bash
 npm install
-cp .env.example .env      # then edit .env
-npm start                 # open http://localhost:3000
+cp .env.example .env   # fill in the keys you have
+npm start              # http://localhost:3000
 ```
-
-With Ollama installed locally you can simply set `OLLAMA_HOST=http://localhost:11434`.
-
-## Deploy on Render
-
-1. Push this folder to a GitHub repo.
-2. On render.com: **New → Blueprint**, pick the repo (it reads `render.yaml`).
-   Or **New → Web Service**: Runtime Node, Build `npm install`, Start `npm start`.
-3. In **Environment**, set `OLLAMA_API_KEY` (and `ACCESS_PASSWORD` if you want one).
-4. Your site will be at `https://<service-name>.onrender.com`. The service name you choose is the subdomain.
-
-Free Render services sleep after about 15 minutes idle, so the first visit afterwards takes ~30–60 s to wake up.
-
-## Protect your API key
-
-The site is public, so anyone with the link could use your Ollama quota.
-Set `ACCESS_PASSWORD` in Render and the chat will ask for it once per browser.
 
 ## Customize
 
-- **Courses:** edit the `COURSES` array at the top of `public/app.js`.
+- **Courses:** edit `COURSES` at the top of `public/js/courses.js`. `id` is the short name chats are saved under.
 - **Assistant behaviour:** edit `SYSTEM_PROMPT` in `server.js`.
-- **Logo/name:** the brand block in `public/index.html`.

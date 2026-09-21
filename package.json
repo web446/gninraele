@@ -1,7 +1,7 @@
 {
   "name": "elearning-chat",
   "version": "1.0.0",
-  "description": "Moodle-style course page with a floating Ollama coding assistant",
+  "description": "Moodle-style course page with a multi-model AI assistant that saves chats per course",
   "type": "module",
   "main": "server.js",
   "scripts": {
@@ -11,6 +11,7 @@
     "node": ">=18"
   },
   "dependencies": {
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "mongodb": "^6.8.0"
   }
 }

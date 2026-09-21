@@ -7,11 +7,19 @@ services:
     startCommand: npm start
     healthCheckPath: /healthz
     envVars:
-      - key: OLLAMA_HOST
-        value: https://ollama.com
-      - key: OLLAMA_MODEL
-        value: gpt-oss:20b
+      - key: ACCESS_PASSWORD
+        sync: false
+      - key: MONGODB_URI
+        sync: false
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
       - key: OLLAMA_API_KEY
         sync: false
-      - key: ACCESS_PASSWORD
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
         sync: false
