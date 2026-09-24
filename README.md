@@ -46,6 +46,28 @@ Recording a payment adds a semester starting today, or right after the current o
 3. Log in at `/login.html` → you land on `/admin.html`.
 4. Old chats from the single-password version are moved to your admin account automatically.
 
+## Student codes (4 digits)
+
+Students log in with a 4-digit numeric code. The code is stored twice: as a scrypt hash
+(used to check logins) and encrypted with `PIN_SECRET` (so the admin area can show it again
+with **Show code**). Because a 4-digit code is easy to guess, three things protect it:
+
+- 5 wrong tries per username and IP address in 15 minutes.
+- `LOCK_AFTER_TRIES` (10) wrong tries in total locks the account for `LOCK_MINUTES` (60). The
+  admin area shows a **Locked** badge and an **Unlock** button.
+- Usernames are not listed anywhere public.
+
+Set `PASSWORD_DIGITS=6` for a stronger code with the same experience.
+
+## Keeping the AI models working
+
+- The model list is fetched live from each provider, and Gemini models are filtered to the ones
+  that actually support chat generation.
+- **Test AI models** in the admin area sends one tiny message to every model and marks each as
+  working or broken. Broken ones disappear from the student picker.
+- If a model fails mid-request (retired, rate-limited, overloaded), the server automatically
+  retries with another working model and tells the student which one answered.
+
 ## Security notes
 
 - Passwords are hashed with scrypt and never stored or logged in plain text.

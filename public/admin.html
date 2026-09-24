@@ -35,7 +35,12 @@
         <h1>Students</h1>
         <p id="settingsLine"></p>
       </div>
-      <button class="btn primary" id="newStudent">+ New student</button>
+      <div class="admin-buttons">
+        <button class="btn ghost" id="announceBtn">Announcement</button>
+        <button class="btn ghost" id="testModelsBtn">Test AI models</button>
+        <button class="btn ghost" id="exportBtn">Export CSV</button>
+        <button class="btn primary" id="newStudent">+ New student</button>
+      </div>
     </div>
 
     <section class="summary" id="summary"></section>
@@ -55,6 +60,12 @@
         </select>
       </div>
     </div>
+
+    <section class="panel model-panel" id="modelPanel" hidden>
+      <div class="panel-head"><div><h2>AI models</h2><p id="modelPanelSub">Each model gets one small test message.</p></div>
+      <button class="btn ghost" id="closeModelPanel">Close</button></div>
+      <div id="modelResults" class="model-results"></div>
+    </section>
 
     <section class="panel">
       <div class="student-list" id="students"><p class="chat-rows-loading">Loading students…</p></div>
@@ -107,7 +118,7 @@
   <dialog class="dialog" id="credsDialog">
     <form method="dialog">
       <h3>Give these to the student</h3>
-      <p>The password is shown only once. If it is lost, generate a new one.</p>
+      <p>You can see this code again any time with the <b>Show code</b> button.</p>
       <div class="creds" id="creds"></div>
       <div class="dialog-actions">
         <button type="button" class="btn ghost" id="copyCreds">Copy</button>

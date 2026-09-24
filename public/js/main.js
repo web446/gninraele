@@ -146,6 +146,12 @@ me = user;
 setCourses(user.courses);
 renderAccount();
 
+getJSON("/api/announcement").then(({ text }) => {
+  const bar = document.getElementById("announceBar");
+  bar.textContent = text || "";
+  bar.hidden = !text;
+}).catch(() => {});
+
 let refreshTimer;
 initChat({
   storage: "mongodb",

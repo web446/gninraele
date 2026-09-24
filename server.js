@@ -16,7 +16,7 @@ if (fs.existsSync(envPath)) {
   }
 }
 
-const { listModels, streamChat, ProviderError } = await import("./lib/providers.js");
+const { listModels, streamChat, ProviderError, testModel, fallbackModels, getHealth, setHealth, noteHealth } = await import("./lib/providers.js");
 const { createStore, chatMeta } = await import("./lib/store.js");
 const auth = await import("./lib/auth.js");
 const { accessState, nextPeriod, today, isDate, SEMESTER_MONTHS, GRACE_DAYS } = await import("./lib/access.js");
@@ -25,6 +25,8 @@ const PORT = process.env.PORT || 3000;
 const DAILY_LIMIT = Number(process.env.DAILY_MESSAGE_LIMIT ?? 100);
 const DEFAULT_PRICE = Number(process.env.SEMESTER_PRICE ?? 0);
 const CURRENCY = process.env.CURRENCY || "USD";
+const LOCK_AFTER = Number(process.env.LOCK_AFTER_TRIES ?? 10);
+const LOCK_MINUTES = Number(process.env.LOCK_MINUTES ?? 60);
 
 const SYSTEM_PROMPT = `You are a helpful study assistant for engineering and computer-science students.
 You mainly help with code: explaining it, debugging it and writing it (Python, C/C++, Java, JavaScript,
@@ -48,6 +50,7 @@ async function bootstrap() {
       id: uid(), username, passwordHash: auth.hashPassword(password), name: process.env.ADMIN_NAME || "Administrator",
       phone: "", email: "", role: "admin", accountStatus: "active", courses: [], sessionVersion: 1,
       usage: { day: today(), messages: 0 }, adminNote: "", lastLoginAt: null,
+      announcement: "", modelHealth: {}, failedLogins: 0, lockedUntil: null,
       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     });
     console.log("=".repeat(60));
@@ -61,8 +64,11 @@ async function bootstrap() {
     await store.chats.update(chat.id, { userId: admin.id, courseId: chat.courseId || chat.course || "GENERAL" });
   }
   if (legacy.length) console.log(`Moved ${legacy.length} old chat(s) to the admin account.`);
+  setHealth(admin.modelHealth || {});
+  return admin;
 }
-await bootstrap();
+const siteAdmin = await bootstrap();
+const saveHealth = () => store.users.update(siteAdmin.id, { modelHealth: getHealth() }).catch(() => {});
 
 /* ---------------- app ---------------- */
 const app = express();
@@ -108,6 +114,7 @@ const requireWrite = (req, res, next) =>
   req.access.canWrite ? next() : res.status(402).json({ error: "Your subscription has expired. Pay for the new semester to keep using the assistant.", access: req.access });
 
 const requireAdmin = (req, res, next) => (req.user.role === "admin" ? next() : res.status(403).json({ error: "Admins only." }));
+const adminOnly = [requireAuth, requireAdmin];
 
 const publicUser = (u, access) => ({ id: u.id, username: u.username, name: u.name, role: u.role, courses: u.courses || [], access });
 
@@ -119,8 +126,20 @@ app.post("/api/auth/login", wrap(async (req, res) => {
   if (auth.loginBlocked(key)) return res.status(429).json({ error: "Too many attempts. Wait 15 minutes and try again." });
 
   const user = username ? await store.users.findOne({ username }) : null;
+  if (user?.lockedUntil && user.lockedUntil > new Date().toISOString()) {
+    return res.status(429).json({ error: "This account is locked for a while after too many wrong codes. Contact your teacher." });
+  }
   if (!user || !auth.verifyPassword(password, user.passwordHash)) {
     auth.loginFailed(key);
+    if (user) {
+      const failed = (user.failedLogins || 0) + 1;
+      const fields = { failedLogins: failed };
+      if (failed >= LOCK_AFTER) {
+        fields.lockedUntil = new Date(Date.now() + LOCK_MINUTES * 60000).toISOString();
+        fields.failedLogins = 0;
+      }
+      await store.users.update(user.id, fields);
+    }
     return res.status(401).json({ error: "Wrong username or password." });
   }
   const subs = user.role === "admin" ? [] : await store.subs.find({ userId: user.id });
@@ -134,7 +153,7 @@ app.post("/api/auth/login", wrap(async (req, res) => {
   }
   auth.loginSucceeded(key);
   auth.issueCookie(res, user, req);
-  await store.users.update(user.id, { lastLoginAt: new Date().toISOString() });
+  await store.users.update(user.id, { lastLoginAt: new Date().toISOString(), failedLogins: 0, lockedUntil: null });
   res.json({ user: publicUser(user, access) });
 }));
 
@@ -169,7 +188,39 @@ app.put("/api/me/courses", requireAuth, requireWrite, wrap(async (req, res) => {
 
 /* ---------------- models ---------------- */
 app.get("/api/models", requireAuth, wrap(async (req, res) => {
-  res.json(await listModels({ force: req.query.refresh === "1" && req.user.role === "admin" }));
+  const data = await listModels({ force: req.query.refresh === "1" && req.user.role === "admin" });
+  const health = getHealth();
+  res.json({ ...data, models: data.models.map((m) => ({ ...m, health: health[m.id] || null })) });
+}));
+
+/* Try every model once and remember which ones answer */
+app.post("/api/admin/models/test", ...adminOnly, wrap(async (req, res) => {
+  const { models } = await listModels();
+  const wanted = Array.isArray(req.body?.models) && req.body.models.length
+    ? models.filter((m) => req.body.models.includes(m.id))
+    : models.slice(0, 40);
+  const results = {};
+  const queue = [...wanted];
+  await Promise.all(Array.from({ length: 4 }, async () => {
+    while (queue.length) {
+      const m = queue.shift();
+      results[m.id] = await testModel(m.id);
+    }
+  }));
+  await saveHealth();
+  res.json({ results, tested: wanted.length });
+}));
+
+/* Announcement shown to every student */
+app.get("/api/announcement", requireAuth, wrap(async (_req, res) => {
+  const admin = await store.users.findOne({ id: siteAdmin.id });
+  res.json({ text: admin?.announcement || "" });
+}));
+
+app.put("/api/admin/announcement", ...adminOnly, wrap(async (req, res) => {
+  const text = String(req.body?.text || "").slice(0, 400);
+  await store.users.update(siteAdmin.id, { announcement: text });
+  res.json({ text });
 }));
 
 /* ---------------- chat (streaming) ---------------- */
@@ -187,27 +238,55 @@ app.post("/api/chat", requireAuth, requireWrite, async (req, res) => {
 
   const controller = new AbortController();
   res.on("close", () => controller.abort());
-  try {
-    const stream = streamChat({ modelId: model, messages: messages.slice(-60), system: SYSTEM_PROMPT, signal: controller.signal });
-    let started = false;
-    for await (const text of stream) {
-      if (!started) {
-        res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
-        res.setHeader("Cache-Control", "no-cache");
-        res.setHeader("X-Accel-Buffering", "no");
-        started = true;
+
+  const history = messages.slice(-60);
+  const needsVision = history.some((m) => Array.isArray(m.images) && m.images.length);
+  const { models: known } = await listModels();
+  const label = (id) => known.find((m) => m.id === id)?.label || id;
+
+  let queue = [model];
+  let lastError = "";
+  let started = false;
+
+  while (queue.length && !started) {
+    const current = queue.shift();
+    try {
+      const stream = streamChat({ modelId: current, messages: history, system: SYSTEM_PROMPT, signal: controller.signal });
+      for await (const text of stream) {
+        if (!started) {
+          res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
+          res.setHeader("Cache-Control", "no-cache");
+          res.setHeader("X-Accel-Buffering", "no");
+          started = true;
+          if (current !== model) res.write(`${JSON.stringify({ switched: { id: current, label: label(current) } })}\n`);
+        }
+        res.write(`${JSON.stringify({ t: text })}\n`);
       }
-      res.write(`${JSON.stringify({ t: text })}\n`);
+      if (!started) {
+        lastError = "The model replied with nothing.";
+        noteHealth(current, false, lastError);
+      } else {
+        noteHealth(current, true);
+      }
+    } catch (err) {
+      if (controller.signal.aborted) return;
+      if (started) { res.end(`${JSON.stringify({ error: err.message })}\n`); return; }
+      lastError = err instanceof ProviderError ? err.message : "The AI provider stopped unexpectedly.";
+      if (!(err instanceof ProviderError)) console.error(err);
+      noteHealth(current, false, lastError);
     }
-    if (!started) res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
-    res.end(`${JSON.stringify({ done: true })}\n`);
-  } catch (err) {
-    if (controller.signal.aborted) return;
-    const message = err instanceof ProviderError ? err.message : "The AI provider stopped unexpectedly.";
-    if (!(err instanceof ProviderError)) console.error(err);
-    if (!res.headersSent) return res.status(err.status && err.status < 600 ? err.status : 502).json({ error: message });
-    res.end(`${JSON.stringify({ error: message })}\n`);
+    if (!started && queue.length === 0 && current === model) {
+      // first choice failed: line up two working alternatives
+      queue = (await fallbackModels(model, { needsVision })).map((m) => m.id);
+    }
   }
+  saveHealth();
+
+  if (!started) {
+    if (!res.headersSent) return res.status(502).json({ error: `${lastError} I also tried other models and none answered.` });
+    return res.end(`${JSON.stringify({ error: lastError })}\n`);
+  }
+  res.end(`${JSON.stringify({ done: true })}\n`);
 });
 
 /* ---------------- saved chats (always scoped to the owner) ---------------- */
@@ -217,7 +296,9 @@ const cleanCourse = (c) => String(c || "GENERAL").replace(/[^\w.-]/g, "").slice(
 app.get("/api/chats", requireAuth, wrap(async (req, res) => {
   const where = { userId: req.user.id };
   if (req.query.course) where.courseId = cleanCourse(req.query.course);
-  const chats = await store.chats.find(where, { sort: { updatedAt: -1 }, limit: 500 });
+  let chats = await store.chats.find(where, { sort: { updatedAt: -1 }, limit: 500 });
+  const q = String(req.query.q || "").toLowerCase().trim();
+  if (q) chats = chats.filter((c) => `${c.title} ${c.preview}`.toLowerCase().includes(q));
   res.json(chats.map(chatMeta));
 }));
 
@@ -286,13 +367,12 @@ app.delete("/api/chats/:id", requireAuth, wrap(async (req, res) => {
 }));
 
 /* ---------------- admin ---------------- */
-const adminOnly = [requireAuth, requireAdmin];
-
 async function studentCard(user) {
   const subs = await store.subs.find({ userId: user.id }, { sort: { endDate: -1 } });
   return {
     id: user.id, username: user.username, name: user.name, phone: user.phone || "", email: user.email || "",
     accountStatus: user.accountStatus, adminNote: user.adminNote || "", lastLoginAt: user.lastLoginAt || null,
+    locked: Boolean(user.lockedUntil && user.lockedUntil > new Date().toISOString()), lockedUntil: user.lockedUntil || null,
     createdAt: user.createdAt, access: accessState(user, subs), subscriptions: subs,
   };
 }
@@ -323,14 +403,14 @@ app.post("/api/admin/students", ...adminOnly, wrap(async (req, res) => {
     if (req.body?.username) return res.status(409).json({ error: "That username is already taken." });
     username = `${username}.${crypto.randomInt(10, 99)}`;
   }
-  const password = auth.generatePassword();
+  const password = auth.generatePin();
   const now = new Date().toISOString();
   const user = await store.users.insert({
-    id: uid(), username, passwordHash: auth.hashPassword(password), name,
+    id: uid(), username, passwordHash: auth.hashPassword(password), passwordEnc: auth.encryptPin(password), name,
     phone: String(req.body?.phone || "").slice(0, 40), email: String(req.body?.email || "").slice(0, 120),
     role: "student", accountStatus: "active", courses: [], sessionVersion: 1,
     usage: { day: today(), messages: 0 }, adminNote: String(req.body?.note || "").slice(0, 500),
-    lastLoginAt: null, createdAt: now, updatedAt: now,
+    failedLogins: 0, lockedUntil: null, lastLoginAt: null, createdAt: now, updatedAt: now,
   });
   res.json({ student: await studentCard(user), password });
 }));
@@ -338,13 +418,32 @@ app.post("/api/admin/students", ...adminOnly, wrap(async (req, res) => {
 app.post("/api/admin/students/:id/password", ...adminOnly, wrap(async (req, res) => {
   const user = await store.users.findOne({ id: req.params.id, role: "student" });
   if (!user) return res.status(404).json({ error: "Student not found." });
-  const password = auth.generatePassword();
+  const password = auth.generatePin();
   await store.users.update(user.id, {
     passwordHash: auth.hashPassword(password),
+    passwordEnc: auth.encryptPin(password),
     sessionVersion: (user.sessionVersion || 1) + 1, // logs them out everywhere
+    failedLogins: 0, lockedUntil: null,
     updatedAt: new Date().toISOString(),
   });
   res.json({ password });
+}));
+
+/* Show the current code (admins only) */
+app.get("/api/admin/students/:id/password", ...adminOnly, wrap(async (req, res) => {
+  const user = await store.users.findOne({ id: req.params.id, role: "student" });
+  if (!user) return res.status(404).json({ error: "Student not found." });
+  const password = user.passwordEnc ? auth.decryptPin(user.passwordEnc) : null;
+  if (!password) return res.status(404).json({ error: "This code can't be shown. Generate a new one." });
+  res.json({ password });
+}));
+
+/* Unlock an account after too many wrong codes */
+app.post("/api/admin/students/:id/unlock", ...adminOnly, wrap(async (req, res) => {
+  const user = await store.users.findOne({ id: req.params.id, role: "student" });
+  if (!user) return res.status(404).json({ error: "Student not found." });
+  await store.users.update(user.id, { lockedUntil: null, failedLogins: 0 });
+  res.json({ student: await studentCard({ ...user, lockedUntil: null, failedLogins: 0 }) });
 }));
 
 app.patch("/api/admin/students/:id", ...adminOnly, wrap(async (req, res) => {

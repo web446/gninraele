@@ -64,6 +64,7 @@ function studentRow(s) {
       </span>
       <span class="student-state">
         <span class="pill ${a.status}">${STATUS_LABEL[a.status]}</span>
+        ${s.locked ? '<span class="pill locked">Locked</span>' : ""}
         <span class="student-until">${a.until ? `until ${esc(a.until)}${a.status === "active" && a.daysLeft !== null ? ` (${a.daysLeft}d)` : ""}` : "never paid"}</span>
       </span>
     </button>
@@ -76,6 +77,8 @@ function studentRow(s) {
           ? `<button class="btn ghost" data-status="suspended" data-id="${esc(s.id)}">Suspend</button>`
           : `<button class="btn ghost" data-status="active" data-id="${esc(s.id)}">Reactivate</button>`}
         ${s.accountStatus === "deactivated" ? "" : `<button class="btn ghost danger-text" data-status="deactivated" data-id="${esc(s.id)}">Close account</button>`}
+        <button class="btn ghost" data-show="${esc(s.id)}">Show code</button>
+        ${s.locked ? `<button class="btn ghost" data-unlock="${esc(s.id)}">Unlock</button>` : ""}
         <button class="btn ghost" data-note="${esc(s.id)}">Edit note</button>
       </div>
       <div class="student-meta">
@@ -115,6 +118,8 @@ function render() {
   list.querySelectorAll("[data-password]").forEach((b) => b.addEventListener("click", () => resetPassword(b.dataset.password)));
   list.querySelectorAll("[data-status]").forEach((b) => b.addEventListener("click", () => changeStatus(b.dataset.id, b.dataset.status)));
   list.querySelectorAll("[data-note]").forEach((b) => b.addEventListener("click", () => editNote(b.dataset.note)));
+  list.querySelectorAll("[data-show]").forEach((b) => b.addEventListener("click", () => showPassword(b.dataset.show)));
+  list.querySelectorAll("[data-unlock]").forEach((b) => b.addEventListener("click", () => unlock(b.dataset.unlock)));
   list.querySelectorAll("[data-void]").forEach((b) => b.addEventListener("click", () => voidPayment(b.dataset.void)));
   renderSummary();
 }
@@ -251,6 +256,88 @@ async function voidPayment(id) {
     toast("Entry cancelled.", "success");
   } catch (e) { toast(e.message, "error"); }
 }
+
+async function showPassword(id) {
+  const s = data.students.find((x) => x.id === id);
+  try {
+    const { password } = await getJSON(`/api/admin/students/${id}/password`);
+    showCredentials(s.username, password);
+  } catch (e) { toast(e.message, "error"); }
+}
+
+async function unlock(id) {
+  try {
+    await sendJSON(`/api/admin/students/${id}/unlock`, "POST", {});
+    await load();
+    toast("Account unlocked.", "success");
+  } catch (e) { toast(e.message, "error"); }
+}
+
+/* ---------- announcement ---------- */
+$("announceBtn").addEventListener("click", async () => {
+  let current = "";
+  try { current = (await getJSON("/api/announcement")).text; } catch { /* ignore */ }
+  const text = await ask({
+    title: "Message for all students",
+    text: "It appears at the top of every student's page. Leave it empty to remove it.",
+    input: { value: current, placeholder: "e.g. Payments for the spring semester are due on 1 February." },
+    okText: "Save", cancel: true,
+  });
+  if (text === null) return;
+  try {
+    await sendJSON("/api/admin/announcement", "PUT", { text });
+    toast(text ? "Announcement published." : "Announcement removed.", "success");
+  } catch (e) { toast(e.message, "error"); }
+});
+
+/* ---------- model testing ---------- */
+$("closeModelPanel").addEventListener("click", () => ($("modelPanel").hidden = true));
+
+$("testModelsBtn").addEventListener("click", async () => {
+  const panel = $("modelPanel");
+  panel.hidden = false;
+  $("modelResults").innerHTML = '<p class="chat-rows-loading">Testing every model, this can take a minute…</p>';
+  try {
+    const { results } = await sendJSON("/api/admin/models/test", "POST", {});
+    const { models } = await getJSON("/api/models");
+    const rows = models.map((m) => ({ ...m, res: results[m.id] || m.health }));
+    const working = rows.filter((r) => r.res?.ok);
+    $("modelPanelSub").textContent = `${working.length} of ${rows.length} models answered. Broken ones are hidden from the student picker.`;
+    $("modelResults").innerHTML = rows
+      .sort((a, b) => Number(Boolean(b.res?.ok)) - Number(Boolean(a.res?.ok)) || a.label.localeCompare(b.label))
+      .map((r) => `<div class="model-result ${r.res?.ok ? "ok" : "bad"}">
+          <span class="dot"></span>
+          <span class="model-result-name">${esc(r.label)}<small>${esc(r.id)}</small></span>
+          <span class="model-result-msg">${r.res?.ok ? "Working" : esc(r.res?.error || "Not tested")}</span>
+        </div>`)
+      .join("");
+  } catch (e) {
+    $("modelResults").innerHTML = `<p class="chat-rows-loading">${esc(e.message)}</p>`;
+  }
+});
+
+/* ---------- CSV export ---------- */
+$("exportBtn").addEventListener("click", () => {
+  const cell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const lines = [["Name", "Username", "Phone", "Status", "Paid until", "Payment date", "Period", "Amount", "Payment status", "Label", "Note"].join(",")];
+  for (const s of data.students) {
+    if (!s.subscriptions.length) {
+      lines.push([s.name, s.username, s.phone, s.access.status, "", "", "", "", "", "", s.adminNote].map(cell).join(","));
+      continue;
+    }
+    for (const p of s.subscriptions) {
+      lines.push([s.name, s.username, s.phone, s.access.status, s.access.until || "", (p.paidAt || "").slice(0, 10),
+        `${p.startDate} to ${p.endDate}`, p.amount, p.paymentStatus, p.termLabel, s.adminNote].map(cell).join(","));
+    }
+  }
+  const url = URL.createObjectURL(new Blob(["\ufeff" + lines.join("\n")], { type: "text/csv;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `students-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast("CSV downloaded. Open it with Excel.", "success");
+});
 
 /* ---------- start ---------- */
 let searchTimer;

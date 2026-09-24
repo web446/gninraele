@@ -11,6 +11,7 @@ const el = {
   modelMenu: $("modelMenu"), modelSearch: $("modelSearch"), modelList: $("modelList"), modelRefresh: $("modelRefresh"),
   courseSelect: $("courseSelect"),
   history: $("historyPane"), historyFilter: $("historyFilter"), historyList: $("historyList"), storageWarn: $("storageWarn"),
+  exportBtn: $("exportBtn"), historySearch: $("historySearch"),
   form: $("composer"), text: $("chatText"), send: $("sendBtn"), attachBtn: $("attachBtn"), fileInput: $("fileInput"),
   strip: $("attachStrip"), warn: $("composerWarn"), drop: $("dropOverlay"),
 };
@@ -128,7 +129,9 @@ function renderModelList() {
   let html = "";
   for (const p of state.providers) {
     if (!p.enabled) continue;
-    const list = state.models.filter((m) => m.provider === p.id && (!q || `${m.label} ${m.model} ${p.label}`.toLowerCase().includes(q)));
+    const list = state.models
+      .filter((m) => m.provider === p.id && (!q || `${m.label} ${m.model} ${p.label}`.toLowerCase().includes(q)))
+      .filter((m) => m.health?.ok !== false || q);
     if (!list.length) continue;
     html += `<div class="model-group"><div class="model-group-head"><span>${esc(p.label)}</span><span class="tier-pill ${p.tier}">${p.tier === "free" ? "Free" : "Paid"}</span></div>`;
     if (p.error) html += `<p class="model-group-note">${esc(p.error)}</p>`;
@@ -137,6 +140,7 @@ function renderModelList() {
         (m) => `<button type="button" role="option" class="model-item ${m.id === state.modelId ? "selected" : ""}" data-id="${esc(m.id)}" aria-selected="${m.id === state.modelId}">
           <span class="model-item-name">${esc(m.label)}</span>
           ${m.label !== m.model ? `<span class="model-item-id">${esc(m.model)}</span>` : ""}
+          ${m.health?.ok === false ? '<span class="broken-tag" title="This model failed the last test">Not working</span>' : ""}
           ${m.vision ? '<span class="vision-tag" title="Can read images">Images</span>' : ""}
         </button>`
       )
@@ -186,7 +190,8 @@ export async function loadModels(force = false) {
     state.models = data.models;
     state.providers = data.providers;
     if (!currentModel()) {
-      const pick = state.models.find((m) => m.tier === "free" && m.vision) || state.models[0];
+      const working = state.models.filter((m) => m.health?.ok !== false);
+      const pick = working.find((m) => m.tier === "free" && m.vision) || working[0] || state.models[0];
       state.modelId = pick?.id || "";
     }
   } catch (err) {
@@ -344,6 +349,7 @@ async function send() {
   const md = bot.querySelector(".msg-md");
 
   let reply = "";
+  let usedModel = model.label;
   let frame = 0;
   let failure = null;
   const paint = () => {
@@ -374,6 +380,11 @@ async function send() {
         if (!line.trim()) continue;
         const data = JSON.parse(line);
         if (data.error) throw new Error(data.error);
+        if (data.switched) {
+          usedModel = data.switched.label;
+          bot.querySelector(".msg-model").textContent = usedModel;
+          toast(`${model.label} wasn't available, so ${usedModel} answered instead.`);
+        }
         if (data.t) {
           reply += data.t;
           if (!frame) frame = requestAnimationFrame(paint);
@@ -392,7 +403,7 @@ async function send() {
   bot.remove();
   const visible = state.chat === c;
   if (reply) {
-    const botMsg = { role: "assistant", content: reply, model: model.label, at: new Date().toISOString() };
+    const botMsg = { role: "assistant", content: reply, model: usedModel, at: new Date().toISOString() };
     c.messages.push(botMsg);
     if (visible) el.body.appendChild(messageEl(botMsg));
   }
@@ -411,8 +422,10 @@ async function send() {
 async function renderHistory() {
   el.historyList.innerHTML = `<p class="history-empty">Loading…</p>`;
   try {
-    const course = el.historyFilter.value;
-    const chats = await getJSON(`/api/chats${course ? `?course=${encodeURIComponent(course)}` : ""}`);
+    const params = new URLSearchParams();
+    if (el.historyFilter.value) params.set("course", el.historyFilter.value);
+    if (el.historySearch.value.trim()) params.set("q", el.historySearch.value.trim());
+    const chats = await getJSON(`/api/chats?${params}`);
     el.historyList.innerHTML = chats.length
       ? chats
           .map(
@@ -437,6 +450,26 @@ function toggleHistory(open = el.history.hidden) {
     toggleModelMenu(false);
     renderHistory();
   }
+}
+
+/** Downloads the open chat as a Markdown file. */
+function exportChat() {
+  const c = state.chat;
+  if (!c.messages.length) return toast("This chat is empty.", "error");
+  const lines = [`# ${c.title || "Chat"}`, "", `Course: ${shortName(c.course)}`, ""];
+  for (const m of c.messages) {
+    lines.push(m.role === "user" ? "## You" : `## Assistant (${m.model || ""})`.trim());
+    if (m.images?.length) lines.push(`_[${m.images.length} photo(s) not included in this file]_`);
+    for (const f of m.files || []) lines.push(`_Attached file: ${f.name}_`);
+    lines.push("", m.content || "", "");
+  }
+  const url = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/markdown;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${(c.title || "chat").replace(/[^\w -]/g, "").slice(0, 50) || "chat"}.md`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast("Chat downloaded.", "success");
 }
 
 /* ======================= Public API ======================= */
@@ -516,6 +549,9 @@ export function initChat({ onChange, storage }) {
   el.newBtn.addEventListener("click", () => newChat());
   el.historyBtn.addEventListener("click", () => toggleHistory());
   el.historyFilter.addEventListener("change", renderHistory);
+  let historyTimer;
+  el.historySearch.addEventListener("input", () => { clearTimeout(historyTimer); historyTimer = setTimeout(renderHistory, 250); });
+  el.exportBtn.addEventListener("click", exportChat);
   el.expandBtn.addEventListener("click", () => {
     const full = el.chat.classList.toggle("full");
     el.expandBtn.title = full ? "Shrink" : "Expand";

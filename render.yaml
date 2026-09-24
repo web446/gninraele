@@ -13,6 +13,10 @@ services:
         sync: false
       - key: SESSION_SECRET
         generateValue: true
+      - key: PIN_SECRET
+        generateValue: true
+      - key: PASSWORD_DIGITS
+        value: "4"
       - key: MONGODB_URI
         sync: false
       - key: SEMESTER_MONTHS
