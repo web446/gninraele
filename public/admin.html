@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Students | E-Learning admin</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎓</text></svg>" />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/admin.html" aria-label="Admin home">
+      <svg class="brand-mark" viewBox="0 0 48 48" aria-hidden="true">
+        <path d="M24 8 3 18l21 10 21-10z" fill="var(--navy)"/>
+        <path d="M11 23v9c0 3 6 7 13 7s13-4 13-7v-9l-13 6z" fill="var(--navy)" opacity=".85"/>
+        <path d="M42 19v11" stroke="var(--navy)" stroke-width="2.4" stroke-linecap="round"/>
+        <circle cx="42" cy="32" r="2.4" fill="var(--navy)"/>
+      </svg>
+      <span class="brand-text">E-Learning<small>ADMIN</small></span>
+    </a>
+    <nav class="primary-nav" id="primaryNav">
+      <a href="/admin.html" class="active" aria-current="page">Students</a>
+      <a href="/">My courses</a>
+    </nav>
+    <div class="topbar-right">
+      <span class="user-name" id="userName"></span>
+      <button class="text-link logout" id="logoutBtn" type="button">Log out</button>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="admin-head">
+      <div>
+        <h1>Students</h1>
+        <p id="settingsLine"></p>
+      </div>
+      <button class="btn primary" id="newStudent">+ New student</button>
+    </div>
+
+    <section class="summary" id="summary"></section>
+
+    <div class="toolbar admin-toolbar">
+      <label class="search">
+        <input id="search" type="search" placeholder="Search name, username or phone" aria-label="Search students" />
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+      </label>
+      <div class="select-wrap">
+        <select id="statusFilter" aria-label="Filter by status">
+          <option value="">All statuses</option>
+          <option value="active">Active</option>
+          <option value="expired">Expired</option>
+          <option value="suspended">Suspended</option>
+          <option value="deactivated">Deactivated</option>
+        </select>
+      </div>
+    </div>
+
+    <section class="panel">
+      <div class="student-list" id="students"><p class="chat-rows-loading">Loading students…</p></div>
+    </section>
+  </main>
+
+  <footer class="footer">© 2026 E-Learning Chat</footer>
+
+  <!-- New student -->
+  <dialog class="dialog" id="studentDialog">
+    <form>
+      <h3>New student</h3>
+      <label class="field"><span>Full name</span><input id="sName" maxlength="120" required /></label>
+      <label class="field"><span>Username (leave empty to generate one)</span><input id="sUsername" maxlength="32" autocapitalize="none" spellcheck="false" /></label>
+      <label class="field"><span>Phone (optional)</span><input id="sPhone" maxlength="40" /></label>
+      <label class="field"><span>Note (optional)</span><input id="sNote" maxlength="200" placeholder="e.g. USEK, 3rd year" /></label>
+      <p class="dialog-error" id="studentError" hidden></p>
+      <div class="dialog-actions">
+        <button type="button" class="btn ghost" data-cancel>Cancel</button>
+        <button type="submit" class="btn primary">Create account</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Record a payment -->
+  <dialog class="dialog" id="paymentDialog">
+    <form>
+      <h3 id="paymentTitle">Record payment</h3>
+      <p id="paymentHint"></p>
+      <div class="field-row">
+        <label class="field"><span>Amount</span><input id="pAmount" type="number" min="0" step="0.5" /></label>
+        <label class="field"><span>Semester length (months)</span><input id="pMonths" type="number" min="1" max="12" /></label>
+      </div>
+      <div class="field-row">
+        <label class="field"><span>Starts</span><input id="pStart" type="date" /></label>
+        <label class="field"><span>Ends</span><input id="pEnd" type="date" /></label>
+      </div>
+      <label class="field"><span>Semester label (optional)</span><input id="pLabel" maxlength="60" placeholder="Fall 2026-2027" /></label>
+      <label class="field"><span>Note (optional)</span><input id="pNote" maxlength="200" /></label>
+      <label class="check"><input type="checkbox" id="pFree" /> Free extension (no money received)</label>
+      <p class="dialog-error" id="paymentError" hidden></p>
+      <div class="dialog-actions">
+        <button type="button" class="btn ghost" data-cancel>Cancel</button>
+        <button type="submit" class="btn primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Credentials to hand over -->
+  <dialog class="dialog" id="credsDialog">
+    <form method="dialog">
+      <h3>Give these to the student</h3>
+      <p>The password is shown only once. If it is lost, generate a new one.</p>
+      <div class="creds" id="creds"></div>
+      <div class="dialog-actions">
+        <button type="button" class="btn ghost" id="copyCreds">Copy</button>
+        <button type="submit" class="btn primary">Done</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialog" id="dialog">
+    <form method="dialog" id="dialogForm">
+      <h3 id="dialogTitle"></h3>
+      <p id="dialogText"></p>
+      <input id="dialogInput" autocomplete="off" />
+      <p class="dialog-error" id="dialogError" hidden></p>
+      <div class="dialog-actions">
+        <button type="button" class="btn ghost" id="dialogCancel">Cancel</button>
+        <button type="submit" class="btn primary" id="dialogOk">OK</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="lightbox" id="lightbox"><img id="lightboxImg" alt="" /><button class="lightbox-close" id="lightboxClose" aria-label="Close">×</button></dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script type="module" src="js/admin.js"></script>
+</body>
+</html>

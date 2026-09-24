@@ -7,12 +7,26 @@ services:
     startCommand: npm start
     healthCheckPath: /healthz
     envVars:
-      - key: ACCESS_PASSWORD
+      - key: ADMIN_USERNAME
         sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
       - key: MONGODB_URI
         sync: false
-      - key: GITHUB_TOKEN
-        sync: false
+      - key: SEMESTER_MONTHS
+        value: "5"
+      - key: GRACE_DAYS
+        value: "3"
+      - key: SEMESTER_PRICE
+        value: "15"
+      - key: CURRENCY
+        value: USD
+      - key: TIMEZONE
+        value: Asia/Beirut
+      - key: DAILY_MESSAGE_LIMIT
+        value: "100"
       - key: GEMINI_API_KEY
         sync: false
       - key: OPENROUTER_API_KEY

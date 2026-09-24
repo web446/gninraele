@@ -27,21 +27,23 @@
     </a>
     <nav class="primary-nav" id="primaryNav">
       <a href="#/">Home</a>
-      <a href="#/">Dashboard</a>
       <a href="#/" class="active" aria-current="page">My courses</a>
+      <a href="/admin.html" id="adminLink" hidden>Admin</a>
     </nav>
     <div class="topbar-right">
       <button class="icon-btn bell" aria-label="Notifications">
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg>
         <span class="badge">1</span>
       </button>
-      <svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg>
+      <span class="user-name" id="userName"></span>
+      <button class="text-link logout" id="logoutBtn" type="button">Log out</button>
       <div class="avatar" aria-label="Your profile">
         <svg viewBox="0 0 60 60"><circle cx="30" cy="30" r="30" fill="#c9c9c9"/><circle cx="30" cy="24" r="10" fill="#fff"/><path d="M12 50c3-10 10-14 18-14s15 4 18 14" fill="#fff"/></svg>
       </div>
     </div>
   </header>
 
+  <p class="status-bar" id="statusBar" hidden></p>
   <main class="page" id="view"></main>
 
   <footer class="footer">© 2026 E-Learning Chat. Built for personal study.</footer>
@@ -149,6 +151,28 @@
       <div class="dialog-actions">
         <button type="button" class="btn ghost" id="dialogCancel">Cancel</button>
         <button type="submit" class="btn primary" id="dialogOk">OK</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialog" id="courseDialog">
+    <form>
+      <h3 id="courseDialogTitle">Add a course</h3>
+      <label class="field"><span>Course code</span><input id="cId" placeholder="GRT581" maxlength="40" required /></label>
+      <label class="field"><span>Title shown on the card</span><input id="cTitle" placeholder="202710 - GRT581 - 11958" maxlength="120" /></label>
+      <label class="field"><span>Term (optional)</span><input id="cTerm" placeholder="FALL 2026-2027" maxlength="60" /></label>
+      <div class="field-row">
+        <label class="field"><span>Color</span><input id="cColor" type="color" value="#10b58c" /></label>
+        <label class="field"><span>Pattern</span>
+          <select id="cPattern">
+            <option value="diamonds">Diamonds</option><option value="plaid">Plaid</option>
+            <option value="circles">Circles</option><option value="tiles">Tiles</option>
+          </select>
+        </label>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" class="btn ghost" data-cancel>Cancel</button>
+        <button type="submit" class="btn primary">Save</button>
       </div>
     </form>
   </dialog>

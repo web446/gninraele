@@ -83,3 +83,41 @@ export function uid() {
   if (crypto.randomUUID) return crypto.randomUUID();
   return Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("");
 }
+
+/* ---------- Course editor dialog ---------- */
+const courseDialog = document.getElementById("courseDialog");
+
+export function askCourse(existing = null) {
+  if (!courseDialog) return Promise.resolve(null);
+  const f = courseDialog.querySelector("form");
+  const [id, title, term, color, pattern] = ["cId", "cTitle", "cTerm", "cColor", "cPattern"].map((x) => document.getElementById(x));
+  document.getElementById("courseDialogTitle").textContent = existing ? "Edit course" : "Add a course";
+  id.value = existing?.id || "";
+  id.disabled = Boolean(existing);
+  title.value = existing?.title || "";
+  term.value = existing?.term || "";
+  color.value = existing?.color || "#10b58c";
+  pattern.value = existing?.pattern || "diamonds";
+
+  return new Promise((resolve) => {
+    const finish = (value) => {
+      f.removeEventListener("submit", onSubmit);
+      courseDialog.removeEventListener("cancel", onCancel);
+      courseDialog.querySelector("[data-cancel]").removeEventListener("click", onCancel);
+      courseDialog.close();
+      resolve(value);
+    };
+    const onSubmit = (e) => {
+      e.preventDefault();
+      const code = id.value.trim().toUpperCase().replace(/[^\w.-]/g, "");
+      if (!code || code === "GENERAL") { id.focus(); return; }
+      finish({ id: code, title: title.value.trim() || code, term: term.value.trim(), color: color.value, pattern: pattern.value });
+    };
+    const onCancel = (e) => { e.preventDefault(); finish(null); };
+    f.addEventListener("submit", onSubmit);
+    courseDialog.addEventListener("cancel", onCancel);
+    courseDialog.querySelector("[data-cancel]").addEventListener("click", onCancel);
+    courseDialog.showModal();
+    (existing ? title : id).focus();
+  });
+}

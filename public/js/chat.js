@@ -258,6 +258,11 @@ function renderAttachments() {
 }
 
 function updateWarning() {
+  if (state.access && state.access.canWrite === false) {
+    el.warn.hidden = false;
+    el.warn.textContent = "Your subscription has expired. You can still read your old chats. Pay for the new semester to continue.";
+    return true;
+  }
   const m = currentModel();
   const hasImages = state.attachments.some((a) => a.kind === "image");
   const blocked = hasImages && m && !m.vision;
@@ -286,6 +291,7 @@ function makeTitle(m) {
 
 async function saveChat(c = state.chat) {
   if (!c.id || !c.messages.length) return;
+  if (state.access && state.access.canWrite === false) return;
   const isCurrent = () => state.chat === c;
   const job = (async () => {
     if (isCurrent()) renderHeader("Saving…");
@@ -479,6 +485,24 @@ export async function openSavedChat(id) {
 }
 
 export const currentChatId = () => state.chat.id;
+
+/** Called after the user's courses are loaded or changed. */
+export function refreshCourses() {
+  fillCourseSelects();
+  renderHeader();
+}
+
+/** Locks the composer when the subscription has expired. */
+export function setAccess(access) {
+  state.access = access;
+  const blocked = access && access.canWrite === false;
+  el.text.disabled = blocked;
+  el.send.disabled = blocked;
+  el.attachBtn.disabled = blocked;
+  el.text.placeholder = blocked ? "Your subscription has expired" : "Message the assistant";
+  el.warn.hidden = !blocked;
+  if (blocked) el.warn.textContent = "Your subscription has expired. You can still read your old chats. Pay for the new semester to continue.";
+}
 
 export function initChat({ onChange, storage }) {
   state.onChange = onChange;

@@ -1,23 +1,25 @@
 import { esc, timeAgo } from "./ui.js";
 
-/* =========================================================
-   YOUR COURSES: edit this list.
-   id      short name used for saving chats (letters/numbers only)
-   code    the title shown on the card
-   pattern "plaid" | "diamonds" | "circles" | "tiles"
-   ========================================================= */
-export const COURSES = [
-  { id: "GRT581", code: "202710 - GRT581 - 11958", term: "FALL 2026-2027", color: "#10b58c", pattern: "plaid" },
-  { id: "GEN499", code: "202710 - GEN499 - 12125", term: "FALL 2026-2027", color: "#f27ea3", pattern: "diamonds" },
-  { id: "GRT531", code: "202710 - GRT531 - 10940", term: "FALL 2026-2027", color: "#9b93eb", pattern: "diamonds" },
-  { id: "COURSE4", code: "202710 - COURSE4 - 00000", term: "FALL 2026-2027", color: "#f27ea3", pattern: "circles" },
-  { id: "COURSE5", code: "202710 - COURSE5 - 00000", term: "FALL 2026-2027", color: "#f27ea3", pattern: "tiles" },
-  { id: "COURSE6", code: "202710 - COURSE6 - 00000", term: "FALL 2026-2027", color: "#bdbdbd", pattern: "diamonds" },
-];
+/* Courses now belong to each student and come from the server (User.courses). */
+let COURSES = [];
 
-export const GENERAL = { id: "GENERAL", code: "General (no course)", term: "", color: "#6b7a90", pattern: "tiles" };
+export function setCourses(list) {
+  COURSES = (Array.isArray(list) ? list : []).map((c) => ({
+    id: String(c.id || "").toUpperCase(),
+    code: c.title || c.id,
+    title: c.title || c.id,
+    term: c.term || "",
+    color: c.color || "#10b58c",
+    pattern: c.pattern || "diamonds",
+  }));
+  return COURSES;
+}
+export const getCourses = () => COURSES;
+export const toStored = () => COURSES.map(({ id, title, term, color, pattern }) => ({ id, title, term, color, pattern }));
+
+export const GENERAL = { id: "GENERAL", code: "General (no course)", title: "General", term: "", color: "#6b7a90", pattern: "tiles" };
 export const allCourses = () => [...COURSES, GENERAL];
-export const courseById = (id) => allCourses().find((c) => c.id === id) || { ...GENERAL, id, code: id };
+export const courseById = (id) => allCourses().find((c) => c.id === id) || { ...GENERAL, id, code: id, title: id };
 export const shortName = (id) => (id === "GENERAL" ? "General" : id);
 
 /* ---------- Moodle-style generated course images ---------- */
@@ -82,7 +84,7 @@ const icon = {
 };
 
 /* ---------- Dashboard: My courses ---------- */
-export function renderDashboard(view, { counts = {}, onAsk }) {
+export function renderDashboard(view, { counts = {}, onAsk, onAddCourse, onEditCourse }) {
   view.innerHTML = `
     <div class="toolbar">
       <div class="select-wrap">
@@ -135,21 +137,30 @@ export function renderDashboard(view, { counts = {}, onAsk }) {
             <h3 class="course-title"><a href="#/course/${esc(c.id)}">${esc(c.code)}</a></h3>
             <div class="course-foot">
               <a class="chat-count ${n ? "" : "zero"}" href="#/course/${esc(c.id)}">${icon.chat}${n ? `${n} saved chat${n > 1 ? "s" : ""}` : "No chats yet"}</a>
-              <button class="kebab" data-ask="${esc(c.id)}" title="New AI chat in this course" aria-label="New AI chat in ${esc(c.code)}">${icon.kebab}</button>
+              <span class="course-actions">
+                <button class="kebab" data-edit="${esc(c.id)}" title="Edit this course" aria-label="Edit ${esc(c.code)}">${icon.pencil}</button>
+                <button class="kebab" data-ask="${esc(c.id)}" title="New AI chat in this course" aria-label="New AI chat in ${esc(c.code)}">${icon.chat}</button>
+              </span>
             </div>
           </div>
         </article>`;
       })
-      .join("");
-    view.querySelector("#empty").hidden = list.length > 0;
+      .join("") + `
+        <button class="course add-course" id="addCourse">
+          <span class="add-course-plus">+</span>
+          <span>Add a course</span>
+        </button>`;
+    view.querySelector("#empty").hidden = list.length > 0 || !q;
     grid.querySelectorAll("[data-ask]").forEach((b) => b.addEventListener("click", () => onAsk(b.dataset.ask)));
+    grid.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => onEditCourse(b.dataset.edit)));
+    grid.querySelector("#addCourse").addEventListener("click", onAddCourse);
   };
   [search, sort, display, status].forEach((el) => el.addEventListener("input", draw));
   draw();
 }
 
 /* ---------- Course page with saved chats ---------- */
-export function renderCourse(view, { course, chats, loading, onOpen, onNew, onRename, onDelete }) {
+export function renderCourse(view, { course, chats, loading, onOpen, onNew, onRename, onDelete, onEditCourse, onDeleteCourse }) {
   const rows = loading
     ? `<div class="chat-rows-loading">Loading saved chats…</div>`
     : chats.length
@@ -183,6 +194,10 @@ export function renderCourse(view, { course, chats, loading, onOpen, onNew, onRe
       <div class="course-header-inner">
         ${course.term ? `<span class="term">${esc(course.term)}</span>` : ""}
         <h1>${esc(course.code)}</h1>
+        ${course.id === "GENERAL" ? "" : `<div class="course-header-actions">
+          <button class="btn ghost" id="editCourse">${icon.pencil} Edit course</button>
+          <button class="btn ghost" id="removeCourse">${icon.trash} Remove course</button>
+        </div>`}
       </div>
     </section>
     <section class="panel">
@@ -197,6 +212,8 @@ export function renderCourse(view, { course, chats, loading, onOpen, onNew, onRe
     </section>`;
 
   view.querySelector("#newInCourse").addEventListener("click", onNew);
+  view.querySelector("#editCourse")?.addEventListener("click", () => onEditCourse(course.id));
+  view.querySelector("#removeCourse")?.addEventListener("click", () => onDeleteCourse(course.id));
   view.querySelectorAll("[data-open]").forEach((b) => b.addEventListener("click", () => onOpen(b.dataset.open)));
   view.querySelectorAll("[data-rename]").forEach((b) => b.addEventListener("click", () => onRename(b.dataset.rename)));
   view.querySelectorAll("[data-delete]").forEach((b) => b.addEventListener("click", () => onDelete(b.dataset.delete)));
